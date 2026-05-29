@@ -1,7 +1,7 @@
 {
 	"id": "deepseek-agent",
 	"name": "DeepSeek Agent",
-	"version": "v1.0.0",
+	"version": "v1.0.1",
 	"minAppVersion": "1.4.0",
 	"description": "DeepSeek 驱动的 AI Agent — 能自主读写搜索笔记，执行多步任务",
 	"author": "YourName",

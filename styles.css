@@ -1,0 +1,231 @@
+/* DeepSeek Agent — 样式表 */
+
+.deepseek-agent-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 8px;
+	gap: 8px;
+}
+
+/* 头部 */
+.deepseek-agent-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.deepseek-agent-header h3 {
+	margin: 0;
+	flex: 1;
+	font-size: 14px;
+}
+
+.deepseek-agent-status {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.deepseek-agent-abort-btn {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 4px;
+	padding: 2px 8px;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.deepseek-agent-hidden {
+	display: none !important;
+}
+
+/* 消息列表 */
+.deepseek-agent-messages {
+	flex: 1;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 4px 0;
+}
+
+.deepseek-agent-msg {
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 13px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.deepseek-agent-msg-user {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	align-self: flex-end;
+	max-width: 85%;
+}
+
+.deepseek-agent-msg-assistant {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	align-self: flex-start;
+	max-width: 100%;
+}
+
+.deepseek-agent-msg-error {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+	align-self: flex-start;
+	max-width: 100%;
+	font-size: 12px;
+}
+
+.deepseek-agent-msg-system {
+	background: var(--background-primary-alt);
+	color: var(--text-muted);
+	align-self: flex-start;
+	max-width: 100%;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+/* 工具调用 */
+.deepseek-agent-tool-call {
+	background: var(--background-secondary-alt);
+	border-left: 3px solid var(--interactive-accent);
+	padding: 4px 8px;
+	margin: 2px 0;
+	border-radius: 4px;
+	font-size: 11px;
+	align-self: flex-start;
+	max-width: 100%;
+}
+
+.deepseek-agent-tool-header {
+	font-weight: 600;
+	color: var(--text-accent);
+	margin-bottom: 2px;
+}
+
+.deepseek-agent-tool-detail {
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 80px;
+	overflow-y: auto;
+}
+
+/* 推理过程（V4 Pro/R1 thinking） */
+.deepseek-agent-reasoning {
+	background: var(--background-primary-alt);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	margin: 4px 0;
+	font-size: 11px;
+	align-self: flex-start;
+	max-width: 100%;
+	overflow: hidden;
+}
+
+.deepseek-agent-reasoning-header {
+	padding: 4px 8px;
+	background: var(--background-secondary);
+	font-weight: 600;
+	color: var(--text-muted);
+	font-size: 10px;
+	user-select: none;
+}
+
+.deepseek-agent-reasoning-body {
+	padding: 6px 8px;
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	font-size: 10px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 200px;
+	overflow-y: auto;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.deepseek-agent-tool-result {
+	font-size: 11px;
+	color: var(--text-faint);
+	padding: 2px 8px;
+	align-self: flex-start;
+	font-style: italic;
+}
+
+/* 输入区 */
+.deepseek-agent-input-area {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.deepseek-agent-input {
+	width: 100%;
+	resize: none;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 8px;
+	font-size: 13px;
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	box-sizing: border-box;
+}
+
+.deepseek-agent-input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
+.deepseek-agent-btn-row {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.deepseek-agent-send-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 6px;
+	padding: 6px 16px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.deepseek-agent-send-btn:hover {
+	opacity: 0.9;
+}
+
+/* 快捷按钮 */
+.deepseek-agent-quick-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.deepseek-agent-quick-btn {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 3px 8px;
+	font-size: 11px;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.deepseek-agent-quick-btn:hover {
+	background: var(--interactive-hover);
+}

@@ -1,0 +1,8 @@
+{
+  "apiKey": "",
+  "model": "deepseek-chat",
+  "maxTokens": 4096,
+  "temperature": 0.7,
+  "maxIterations": 20,
+  "systemPrompt": "你是一个 Obsidian 笔记助手 Agent。你可以搜索、读取、创建、编辑笔记来帮助用户完成任务。\n每次执行一个工具后，基于结果决定下一步该做什么，直到任务完成。\n任务完成后输出总结。"
+}

@@ -16,6 +16,7 @@ export class ChatView extends ItemView {
 	private statusEl: HTMLElement;
 	private abortBtn: HTMLElement;
 	private isRunning = false;
+	private scrollRafId = 0;
 
 	constructor(leaf: WorkspaceLeaf, plugin: DeepSeekAgentPlugin) {
 		super(leaf);
@@ -53,6 +54,7 @@ export class ChatView extends ItemView {
 			this.isRunning = false;
 			this.abortBtn.addClass("deepseek-agent-hidden");
 			this.statusEl.setText("已停止");
+			this.agent?.cancel();
 		});
 
 		// ── 消息列表 ──
@@ -98,10 +100,22 @@ export class ChatView extends ItemView {
 		// 清理
 	}
 
+	/** 外部入口：发送任务（被 main.ts quickTask 调用） */
+	sendTask(task: string) {
+		this.inputEl.value = task;
+		this.sendMessage();
+	}
+
 	/** 发送消息 */
-	private async sendMessage() {
-		const text = this.inputEl.value.trim();
-		if (!text || this.isRunning) return;
+	private async sendMessage(text?: string) {
+		// 重入保护：如果已有 Agent 在跑，先取消
+		if (this.isRunning) {
+			this.agent?.cancel();
+			this.isRunning = false;
+		}
+
+		const content = text ?? this.inputEl.value.trim();
+		if (!content) return;
 
 		this.inputEl.value = "";
 		this.isRunning = true;
@@ -110,7 +124,7 @@ export class ChatView extends ItemView {
 		this.statusEl.setText("思考中…");
 
 		// 显示用户消息
-		this.addMessageEl("user", text);
+		this.addMessageEl("user", content);
 
 		try {
 			// 检查是否有 API Key
@@ -126,15 +140,20 @@ export class ChatView extends ItemView {
 				return;
 			}
 
-			const client = new DeepSeekClient(this.plugin.settings);
-			const tools = new VaultTools(this.plugin.app);
-			this.agent = new Agent(
-				client,
-				tools,
-				this.plugin.settings,
-				this.createCallbacks()
-			);
-			await this.agent.run(text);
+			// 多轮对话：复用 Agent 实例，保持上下文
+			if (!this.agent) {
+				const client = new DeepSeekClient(this.plugin.settings);
+				const tools = new VaultTools(this.plugin.app);
+				this.agent = new Agent(
+					client,
+					tools,
+					this.plugin.settings,
+					this.createCallbacks()
+				);
+				await this.agent.run(content);
+			} else {
+				await this.agent.continue(content);
+			}
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : String(err);
 			this.addMessageEl("error", `❌ ${msg}`);
@@ -151,6 +170,7 @@ export class ChatView extends ItemView {
 		let currentAssistantEl: HTMLElement | null = null;
 		let currentAssistantContent = "";
 		let currentReasoningEl: HTMLElement | null = null;
+		let currentReasoningBody: HTMLElement | null = null;
 
 		return {
 			onThinking: (text: string) => {
@@ -171,21 +191,14 @@ export class ChatView extends ItemView {
 						"deepseek-agent-reasoning-header"
 					);
 					header.setText("🧠 推理过程");
-					const body = currentReasoningEl.createDiv(
+					currentReasoningBody = currentReasoningEl.createDiv(
 						"deepseek-agent-reasoning-body"
 					);
-					body.setText(text);
+					currentReasoningBody.setText(text);
 					this.scrollToBottom();
-				} else {
-					const body =
-						currentReasoningEl.querySelector(
-							".deepseek-agent-reasoning-body"
-						);
-					if (body) {
-						body.setText(
-							body.textContent + text
-						);
-					}
+				} else if (currentReasoningBody) {
+					// 增量追加文本节点，避免全量 setText 触发重排
+					currentReasoningBody.insertAdjacentText("beforeend", text);
 				}
 			},
 			onToolCall: (name: string, args: string) => {
@@ -265,7 +278,10 @@ export class ChatView extends ItemView {
 	}
 
 	private scrollToBottom() {
-		requestAnimationFrame(() => {
+		// RAF 防抖：高频调用只触发一次 scroll
+		if (this.scrollRafId) return;
+		this.scrollRafId = requestAnimationFrame(() => {
+			this.scrollRafId = 0;
 			this.messagesEl.scrollTo({
 				top: this.messagesEl.scrollHeight,
 				behavior: "smooth",

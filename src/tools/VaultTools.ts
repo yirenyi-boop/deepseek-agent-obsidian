@@ -2,14 +2,61 @@ import { App, MarkdownView, TFile, TFolder, Vault } from "obsidian";
 import { ToolDefinition, ToolResult } from "../types";
 
 /**
+ * 简单文件内容缓存（TTL 60s）
+ */
+class FileCache {
+	private cache = new Map<string, { content: string; time: number }>();
+	private ttl = 60_000;
+
+	get(path: string): string | undefined {
+		const entry = this.cache.get(path);
+		if (!entry) return undefined;
+		if (Date.now() - entry.time > this.ttl) {
+			this.cache.delete(path);
+			return undefined;
+		}
+		return entry.content;
+	}
+
+	set(path: string, content: string) {
+		this.cache.set(path, { content, time: Date.now() });
+	}
+
+	clear() {
+		this.cache.clear();
+	}
+}
+
+/**
+ * 简易参数校验（不引入 zod，保持零依赖）
+ */
+function validateArgs(
+	args: Record<string, unknown>,
+	schema: { name: string; type: "string" | "number" | "boolean"; required?: boolean }[]
+): string | null {
+	for (const field of schema) {
+		const value = args[field.name];
+		if (field.required && (value === undefined || value === null || value === "")) {
+			return `缺少必填参数: ${field.name}`;
+		}
+		if (value !== undefined && value !== null && typeof value !== field.type) {
+			return `参数 ${field.name} 类型错误: 期望 ${field.type}，收到 ${typeof value}`;
+		}
+	}
+	return null;
+}
+
+/**
  * Agent 可用的 Vault 工具集
  * 所有操作通过 Obsidian API 实现，手机兼容
  */
 export class VaultTools {
 	private app: App;
+	private fileCache: FileCache;
 
 	constructor(app: App) {
 		this.app = app;
+		this.fileCache = new FileCache();
 	}
 
 	/** 获取所有工具定义（发给 DeepSeek 用） */
@@ -118,28 +165,61 @@ export class VaultTools {
 		];
 	}
 
-	/** 执行工具调用 */
+	/** 执行工具调用（含参数前置校验） */
 	async execute(name: string, args: Record<string, unknown>): Promise<ToolResult> {
 		try {
 			switch (name) {
-				case "search_notes":
-					return await this.searchNotes(args.query as string, args.maxResults as number);
-				case "read_note":
+				case "search_notes": {
+					const err = validateArgs(args, [
+						{ name: "query", type: "string", required: true },
+						{ name: "maxResults", type: "number" },
+					]);
+					if (err) return { success: false, output: err };
+					return await this.searchNotes(
+						args.query as string,
+						(args.maxResults as number) ?? 10
+					);
+				}
+				case "read_note": {
+					const err = validateArgs(args, [
+						{ name: "path", type: "string", required: true },
+					]);
+					if (err) return { success: false, output: err };
 					return await this.readNote(args.path as string);
-				case "write_note":
+				}
+				case "write_note": {
+					const err = validateArgs(args, [
+						{ name: "path", type: "string", required: true },
+						{ name: "content", type: "string", required: true },
+						{ name: "overwrite", type: "boolean" },
+					]);
+					if (err) return { success: false, output: err };
 					return await this.writeNote(
 						args.path as string,
 						args.content as string,
-						args.overwrite as boolean
+						(args.overwrite as boolean) ?? false
 					);
-				case "patch_note":
+				}
+				case "patch_note": {
+					const err = validateArgs(args, [
+						{ name: "path", type: "string", required: true },
+						{ name: "search", type: "string", required: true },
+						{ name: "replace", type: "string", required: true },
+					]);
+					if (err) return { success: false, output: err };
 					return await this.patchNote(
 						args.path as string,
 						args.search as string,
 						args.replace as string
 					);
-				case "list_notes":
+				}
+				case "list_notes": {
+					const err = validateArgs(args, [
+						{ name: "path", type: "string" },
+					]);
+					if (err) return { success: false, output: err };
 					return await this.listNotes(args.path as string);
+				}
 				case "get_active_note":
 					return await this.getActiveNote();
 				default:
@@ -153,21 +233,57 @@ export class VaultTools {
 
 	// ── 工具实现 ──
 
+	/** 读取文件，优先走缓存 */
+	private async readFileWithCache(file: TFile): Promise<string> {
+		const cached = this.fileCache.get(file.path);
+		if (cached !== undefined) return cached;
+		const content = await this.app.vault.read(file);
+		this.fileCache.set(file.path, content);
+		return content;
+	}
+
+	/** 并行搜索：按批并行读取，每批 10 个文件 */
 	private async searchNotes(query: string, maxResults = 10): Promise<ToolResult> {
-		const vault = this.app.vault;
-		const files = vault.getMarkdownFiles();
-		const results: { path: string; snippet: string }[] = [];
-
+		const files = this.app.vault.getMarkdownFiles();
 		const q = query.toLowerCase();
+		const results: { path: string; snippet: string }[] = [];
+		const batchSize = 10;
 
+		// 先搜文件名（零成本）
 		for (const file of files) {
 			if (results.length >= maxResults) break;
-			try {
-				const content = await vault.read(file);
+			if (file.path.toLowerCase().includes(q)) {
+				results.push({
+					path: file.path,
+					snippet: `文件名匹配: ${file.name}`,
+				});
+			}
+		}
+		if (results.length >= maxResults) {
+			return this.formatSearchResults(results, query);
+		}
+
+		// 并行读取文件内容，每批 batchSize 个
+		for (let i = 0; i < files.length && results.length < maxResults; i += batchSize) {
+			const batch = files.slice(i, i + batchSize);
+			const contents = await Promise.all(
+				batch.map(async (file) => {
+					try {
+						const content = await this.readFileWithCache(file);
+						return { file, content };
+					} catch {
+						return null;
+					}
+				})
+			);
+
+			for (const entry of contents) {
+				if (!entry || results.length >= maxResults) continue;
+				const { file, content } = entry;
 				const lines = content.split("\n");
-				for (let i = 0; i < lines.length; i++) {
-					if (lines[i].toLowerCase().includes(q)) {
-						const snippet = lines.slice(Math.max(0, i - 1), i + 2).join("\n").trim();
+				for (let j = 0; j < lines.length; j++) {
+					if (lines[j].toLowerCase().includes(q)) {
+						const snippet = lines.slice(Math.max(0, j - 1), j + 2).join("\n").trim();
 						results.push({
 							path: file.path,
 							snippet: snippet.slice(0, 200),
@@ -175,8 +291,6 @@ export class VaultTools {
 						break;
 					}
 				}
-			} catch {
-				// 跳过无法读取的文件
 			}
 		}
 
@@ -188,6 +302,17 @@ export class VaultTools {
 			.map((r) => `📄 ${r.path}\n\`\`\`\n${r.snippet}\n\`\`\``)
 			.join("\n---\n");
 
+		return { success: true, output };
+	}
+
+	/** 格式化搜索结果 */
+	private formatSearchResults(
+		results: { path: string; snippet: string }[],
+		query: string
+	): ToolResult {
+		const output = results
+			.map((r) => `📄 ${r.path}\n\`\`\`\n${r.snippet}\n\`\`\``)
+			.join("\n---\n");
 		return { success: true, output };
 	}
 

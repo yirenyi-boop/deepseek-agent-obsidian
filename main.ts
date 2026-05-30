@@ -54,8 +54,6 @@ export default class DeepSeekAgentPlugin extends Plugin {
 			this.openChatView();
 		});
 
-		// 注册事件：如果 Obsidian 启动时自动恢复视图
-		this.registerRestoreView();
 	}
 
 	onunload() {
@@ -101,25 +99,16 @@ export default class DeepSeekAgentPlugin extends Plugin {
 	/** 快速任务（打开面板并发送消息） */
 	private async quickTask(task: string) {
 		await this.openChatView();
-		// 延迟等待视图渲染完成
+		// 等待视图渲染完成后再灌消息
 		setTimeout(() => {
 			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
 			if (leaves.length > 0) {
 				const view = leaves[0].view;
 				if (view instanceof ChatView) {
-					// 通过自定义事件或直接调用
-					// ChatView 目前不支持外部注入消息，后续可以加
+					view.sendTask(task);
 				}
 			}
 		}, 300);
 	}
 
-	/** 注册视图恢复 */
-	private registerRestoreView() {
-		this.registerEvent(
-			this.app.workspace.on("layout-change", () => {
-				// Obsidian 自动恢复已打开的视图
-			})
-		);
-	}
 }

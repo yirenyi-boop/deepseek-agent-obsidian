@@ -134,6 +134,37 @@ export class Agent {
 		);
 	}
 
+	/** 估算消息的 token 数（中英文混合，~2 chars / token） */
+	private estimateTokens(msg: Message): number {
+		return Math.ceil(msg.content.length / 2);
+	}
+
+	/** 估算整个消息队列的 token 总数 */
+	private totalTokens(): number {
+		return this.messages.reduce((sum, m) => sum + this.estimateTokens(m), 0);
+	}
+
+	/**
+	 * 上下文窗口裁剪
+	 * 当总 token 超过阈值时，保留 system + 原始任务 + 最近 N 轮，丢弃中间历史
+	 */
+	private trimContext() {
+		const maxTokens = 8000;
+		if (this.totalTokens() <= maxTokens) return;
+
+		const keepCount = Math.min(6, this.messages.length);
+		const kept: Message[] = [
+			this.messages[0],
+			this.messages[1],
+			...this.messages.slice(-(keepCount - 2)),
+		];
+
+		this.messages = kept;
+		this.callbacks.onMessage(
+			`[上下文已裁剪：保留了最近 ${keepCount - 2} 轮对话，丢弃了中间历史以节省 token]`
+		);
+	}
+
 	/** 处理单个工具调用 */
 	private async handleToolCall(tc: ToolCall) {
 		const name = tc.function.name;
@@ -158,6 +189,14 @@ export class Agent {
 			tool_call_id: tc.id,
 			name: name,
 		});
+
+		// 每次工具调用后检查上下文窗口
+		this.trimContext();
+	}
+
+	/** 取消当前请求 */
+	cancel() {
+		this.client.cancel();
 	}
 
 	/** 重置 Agent 状态 */
